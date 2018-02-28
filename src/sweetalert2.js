@@ -3,10 +3,9 @@ import { swalClasses, iconTypes } from './utils/classes.js'
 import { formatInputOptions, warn, error, warnOnce, callIfFunction } from './utils/utils.js'
 import * as dom from './utils/dom.js'
 
-let popupParams = Object.assign({}, defaultParams)
+let userDefaultParams = Object.assign({}, defaultParams)
 let queue = []
-
-let previousWindowKeyDown, windowOnkeydownOverridden
+let params, popup, previousWindowKeyDown, windowOnkeydownOverridden
 
 /**
  * Show relevant warnings for given params
@@ -41,7 +40,6 @@ const setParameters = (params) => {
     params.target = 'body'
   }
 
-  let popup
   const oldPopup = dom.getPopup()
   let targetElement = typeof params.target === 'string' ? document.querySelector(params.target) : params.target
   // If the model target has changed, refresh the popup
@@ -416,7 +414,7 @@ const sweetAlert = (...args) => {
     return false
   }
 
-  let params = Object.assign({}, popupParams)
+  params = {}
 
   switch (typeof args[0]) {
     case 'string':
@@ -463,6 +461,8 @@ const sweetAlert = (...args) => {
       return false
   }
 
+  params = Object.assign({}, userDefaultParams, params)
+
   setParameters(params)
 
   const container = dom.getContainer()
@@ -496,32 +496,9 @@ const sweetAlert = (...args) => {
       popup.timeout = setTimeout(() => dismissWith('timer'), params.timer)
     }
 
-    // Get input element by specified type or, if type isn't specified, by params.input
-    const getInput = (inputType) => {
-      inputType = inputType || params.input
-      if (!inputType) {
-        return null
-      }
-      switch (inputType) {
-        case 'select':
-        case 'textarea':
-        case 'file':
-          return dom.getChildByClass(content, swalClasses[inputType])
-        case 'checkbox':
-          return popup.querySelector(`.${swalClasses.checkbox} input`)
-        case 'radio':
-          return popup.querySelector(`.${swalClasses.radio} input:checked`) ||
-            popup.querySelector(`.${swalClasses.radio} input:first-child`)
-        case 'range':
-          return popup.querySelector(`.${swalClasses.range} input`)
-        default:
-          return dom.getChildByClass(content, swalClasses.input)
-      }
-    }
-
     // Get the value of the popup input
     const getInputValue = () => {
-      const input = getInput()
+      const input = sweetAlert.getInput()
       if (!input) {
         return null
       }
@@ -540,7 +517,7 @@ const sweetAlert = (...args) => {
     // input autofocus
     if (params.input) {
       setTimeout(() => {
-        const input = getInput()
+        const input = sweetAlert.getInput()
         if (input) {
           dom.focusInput(input)
         }
@@ -714,7 +691,6 @@ const sweetAlert = (...args) => {
     }
 
     const content = dom.getContent()
-    const actions = dom.getActions()
     const confirmButton = dom.getConfirmButton()
     const cancelButton = dom.getCancelButton()
 
@@ -758,7 +734,7 @@ const sweetAlert = (...args) => {
       ]
 
       if (e.key === 'Enter' && !e.isComposing) {
-        if (e.target === getInput()) {
+        if (e.target === sweetAlert.getInput()) {
           if (['textarea', 'file'].includes(params.input)) {
             return // do not submit
           }
@@ -817,134 +793,6 @@ const sweetAlert = (...args) => {
       window.onkeydown = handleKeyDown
     }
 
-    /**
-     * Show spinner instead of Confirm button and disable Cancel button
-     */
-    sweetAlert.hideLoading = sweetAlert.disableLoading = () => {
-      if (!params.showConfirmButton) {
-        dom.hide(confirmButton)
-        if (!params.showCancelButton) {
-          dom.hide(dom.getActions())
-        }
-      }
-      dom.removeClass([popup, actions], swalClasses.loading)
-      popup.removeAttribute('aria-busy')
-      popup.removeAttribute('data-loading')
-      confirmButton.disabled = false
-      cancelButton.disabled = false
-    }
-
-    sweetAlert.getTitle = () => dom.getTitle()
-    sweetAlert.getContent = () => dom.getContent()
-    sweetAlert.getInput = () => getInput()
-    sweetAlert.getImage = () => dom.getImage()
-    sweetAlert.getButtonsWrapper = () => dom.getButtonsWrapper()
-    sweetAlert.getActions = () => dom.getActions()
-    sweetAlert.getConfirmButton = () => dom.getConfirmButton()
-    sweetAlert.getCancelButton = () => dom.getCancelButton()
-    sweetAlert.getFooter = () => dom.getFooter()
-    sweetAlert.isLoading = () => dom.isLoading()
-
-    sweetAlert.enableButtons = () => {
-      confirmButton.disabled = false
-      cancelButton.disabled = false
-    }
-
-    sweetAlert.disableButtons = () => {
-      confirmButton.disabled = true
-      cancelButton.disabled = true
-    }
-
-    sweetAlert.enableConfirmButton = () => {
-      confirmButton.disabled = false
-    }
-
-    sweetAlert.disableConfirmButton = () => {
-      confirmButton.disabled = true
-    }
-
-    sweetAlert.enableInput = () => {
-      const input = getInput()
-      if (!input) {
-        return false
-      }
-      if (input.type === 'radio') {
-        const radiosContainer = input.parentNode.parentNode
-        const radios = radiosContainer.querySelectorAll('input')
-        for (let i = 0; i < radios.length; i++) {
-          radios[i].disabled = false
-        }
-      } else {
-        input.disabled = false
-      }
-    }
-
-    sweetAlert.disableInput = () => {
-      const input = getInput()
-      if (!input) {
-        return false
-      }
-      if (input && input.type === 'radio') {
-        const radiosContainer = input.parentNode.parentNode
-        const radios = radiosContainer.querySelectorAll('input')
-        for (let i = 0; i < radios.length; i++) {
-          radios[i].disabled = true
-        }
-      } else {
-        input.disabled = true
-      }
-    }
-
-    // Show block with validation error
-    sweetAlert.showValidationError = (error) => {
-      const validationError = dom.getValidationError()
-      validationError.innerHTML = error
-      const popupComputedStyle = window.getComputedStyle(popup)
-      validationError.style.marginLeft = `-${popupComputedStyle.getPropertyValue('padding-left')}`
-      validationError.style.marginRight = `-${popupComputedStyle.getPropertyValue('padding-right')}`
-      dom.show(validationError)
-
-      const input = getInput()
-      if (input) {
-        input.setAttribute('aria-invalid', true)
-        input.setAttribute('aria-describedBy', swalClasses.validationerror)
-        dom.focusInput(input)
-        dom.addClass(input, swalClasses.inputerror)
-      }
-    }
-
-    // Hide block with validation error
-    sweetAlert.resetValidationError = () => {
-      const validationError = dom.getValidationError()
-      if (validationError) {
-        dom.hide(validationError)
-      }
-
-      const input = getInput()
-      if (input) {
-        input.removeAttribute('aria-invalid')
-        input.removeAttribute('aria-describedBy')
-        dom.removeClass(input, swalClasses.inputerror)
-      }
-    }
-
-    sweetAlert.getProgressSteps = () => {
-      return params.progressSteps
-    }
-
-    sweetAlert.setProgressSteps = (progressSteps) => {
-      params.progressSteps = progressSteps
-      setParameters(params)
-    }
-
-    sweetAlert.showProgressSteps = () => {
-      dom.show(dom.getProgressSteps())
-    }
-
-    sweetAlert.hideProgressSteps = () => {
-      dom.hide(dom.getProgressSteps())
-    }
-
     sweetAlert.enableButtons()
     sweetAlert.hideLoading()
     sweetAlert.resetValidationError()
@@ -959,7 +807,7 @@ const sweetAlert = (...args) => {
     for (let i = 0; i < inputTypes.length; i++) {
       const inputClass = swalClasses[inputTypes[i]]
       const inputContainer = dom.getChildByClass(content, inputClass)
-      input = getInput(inputTypes[i])
+      input = sweetAlert.getInput(inputTypes[i])
 
       // set attributes
       if (input) {
@@ -1065,7 +913,7 @@ const sweetAlert = (...args) => {
         break
       case 'checkbox':
         const checkbox = dom.getChildByClass(content, swalClasses.checkbox)
-        const checkboxInput = getInput('checkbox')
+        const checkboxInput = sweetAlert.getInput('checkbox')
         checkboxInput.type = 'checkbox'
         checkboxInput.value = 1
         checkboxInput.id = swalClasses.checkbox
@@ -1282,6 +1130,21 @@ sweetAlert.showLoading = sweetAlert.enableLoading = () => {
   popup.setAttribute('aria-busy', true)
   popup.focus()
 }
+sweetAlert.hideLoading = sweetAlert.disableLoading = () => {
+  const confirmButton = dom.getConfirmButton()
+  const actions = dom.getActions()
+  if (!params.showConfirmButton) {
+    dom.hide(confirmButton)
+    if (!params.showCancelButton) {
+      dom.hide(actions)
+    }
+  }
+  dom.removeClass([popup, actions], swalClasses.loading)
+  popup.removeAttribute('aria-busy')
+  popup.removeAttribute('data-loading')
+  confirmButton.disabled = false
+  dom.getCancelButton().disabled = false
+}
 
 /**
  * Is valid parameter
@@ -1310,10 +1173,10 @@ sweetAlert.setDefaults = (userParams) => {
 
   showWarningsForParams(userParams)
 
-  // assign valid params from userParams to popupParams
+  // assign valid params from userParams to userDefaultParams
   for (const param in userParams) {
     if (sweetAlert.isValidParameter(param)) {
-      popupParams[param] = userParams[param]
+      userDefaultParams[param] = userParams[param]
     }
   }
 }
@@ -1322,7 +1185,7 @@ sweetAlert.setDefaults = (userParams) => {
  * Reset default params for each popup
  */
 sweetAlert.resetDefaults = () => {
-  popupParams = Object.assign({}, defaultParams)
+  userDefaultParams = Object.assign({}, userDefaultParams)
 }
 
 /**
@@ -1342,6 +1205,135 @@ sweetAlert.DismissReason = Object.freeze({
   esc: 'esc',
   timer: 'timer'
 })
+
+sweetAlert.getInput = (inputType) => {
+// Get input element by specified type or, if type isn't specified, by params.input
+  inputType = inputType || params.input
+  if (!inputType) {
+    return null
+  }
+  switch (inputType) {
+    case 'select':
+    case 'textarea':
+    case 'file':
+      return dom.getChildByClass(dom.getContent(), swalClasses[inputType])
+    case 'checkbox':
+      return popup.querySelector(`.${swalClasses.checkbox} input`)
+    case 'radio':
+      return popup.querySelector(`.${swalClasses.radio} input:checked`) ||
+        popup.querySelector(`.${swalClasses.radio} input:first-child`)
+    case 'range':
+      return popup.querySelector(`.${swalClasses.range} input`)
+    default:
+      return dom.getChildByClass(dom.getContent(), swalClasses.input)
+  }
+}
+sweetAlert.getTitle = () => dom.getTitle()
+sweetAlert.getContent = () => dom.getContent()
+sweetAlert.getImage = () => dom.getImage()
+sweetAlert.getButtonsWrapper = () => dom.getButtonsWrapper()
+sweetAlert.getActions = () => dom.getActions()
+sweetAlert.getConfirmButton = () => dom.getConfirmButton()
+sweetAlert.getCancelButton = () => dom.getCancelButton()
+sweetAlert.getFooter = () => dom.getFooter()
+sweetAlert.isLoading = () => dom.isLoading()
+
+sweetAlert.enableButtons = () => {
+  dom.getConfirmButton().disabled = false
+  dom.getCancelButton().disabled = false
+}
+sweetAlert.disableButtons = () => {
+  dom.getConfirmButton().disabled = true
+  dom.getCancelButton().disabled = true
+}
+sweetAlert.enableConfirmButton = () => {
+  dom.getConfirmButton().disabled = false
+}
+sweetAlert.disableConfirmButton = () => {
+  dom.getConfirmButton().disabled = true
+}
+
+sweetAlert.enableInput = () => {
+  const input = sweetAlert.getInput()
+  if (!input) {
+    return false
+  }
+  if (input.type === 'radio') {
+    const radiosContainer = input.parentNode.parentNode
+    const radios = radiosContainer.querySelectorAll('input')
+    for (let i = 0; i < radios.length; i++) {
+      radios[i].disabled = false
+    }
+  } else {
+    input.disabled = false
+  }
+}
+
+sweetAlert.disableInput = () => {
+  const input = sweetAlert.getInput()
+  if (!input) {
+    return false
+  }
+  if (input && input.type === 'radio') {
+    const radiosContainer = input.parentNode.parentNode
+    const radios = radiosContainer.querySelectorAll('input')
+    for (let i = 0; i < radios.length; i++) {
+      radios[i].disabled = true
+    }
+  } else {
+    input.disabled = true
+  }
+}
+
+// Show block with validation error
+sweetAlert.showValidationError = (error) => {
+  const validationError = dom.getValidationError()
+  validationError.innerHTML = error
+  const popupComputedStyle = window.getComputedStyle(popup)
+  validationError.style.marginLeft = `-${popupComputedStyle.getPropertyValue('padding-left')}`
+  validationError.style.marginRight = `-${popupComputedStyle.getPropertyValue('padding-right')}`
+  dom.show(validationError)
+
+  const input = sweetAlert.getInput()
+  if (input) {
+    input.setAttribute('aria-invalid', true)
+    input.setAttribute('aria-describedBy', swalClasses.validationerror)
+    dom.focusInput(input)
+    dom.addClass(input, swalClasses.inputerror)
+  }
+}
+
+// Hide block with validation error
+sweetAlert.resetValidationError = () => {
+  const validationError = dom.getValidationError()
+  if (validationError) {
+    dom.hide(validationError)
+  }
+
+  const input = sweetAlert.getInput()
+  if (input) {
+    input.removeAttribute('aria-invalid')
+    input.removeAttribute('aria-describedBy')
+    dom.removeClass(input, swalClasses.inputerror)
+  }
+}
+
+sweetAlert.getProgressSteps = () => {
+  return params.progressSteps
+}
+
+sweetAlert.setProgressSteps = (progressSteps) => {
+  params.progressSteps = progressSteps
+  setParameters(params)
+}
+
+sweetAlert.showProgressSteps = () => {
+  dom.show(dom.getProgressSteps())
+}
+
+sweetAlert.hideProgressSteps = () => {
+  dom.hide(dom.getProgressSteps())
+}
 
 sweetAlert.noop = () => { }
 
