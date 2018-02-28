@@ -5,8 +5,7 @@ import * as dom from './utils/dom.js'
 
 let popupParams = Object.assign({}, defaultParams)
 let queue = []
-
-let previousWindowKeyDown, windowOnkeydownOverridden
+let params, previousWindowKeyDown, windowOnkeydownOverridden
 
 /**
  * Show relevant warnings for given params
@@ -416,7 +415,7 @@ const sweetAlert = (...args) => {
     return false
   }
 
-  let params = Object.assign({}, popupParams)
+  params = Object.assign({}, popupParams)
 
   switch (typeof args[0]) {
     case 'string':
